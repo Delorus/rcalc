@@ -1,13 +1,8 @@
-use std::{env, process};
+use std::{env, process, io};
 use stac_calc::calculate;
 
 fn main() {
-    let args = env::args().skip(1);
-    let expr: String = args.collect();
-    if expr.is_empty() {
-        eprintln!("Hey, you did not write any expression!");
-        process::exit(1);
-    }
+    let expr = get_expression();
 
     let result = calculate(expr.as_str()).unwrap_or_else(|err| {
         eprintln!("Sorry, we could not calculate your expression: {}", err);
@@ -15,4 +10,17 @@ fn main() {
     });
 
     println!("{}", result);
+}
+
+fn get_expression() -> String {
+    let args = env::args().skip(1);
+    let mut expr: String = args.collect();
+    if expr.is_empty() {
+        io::stdin().read_line(&mut expr).unwrap_or_else(|err| {
+            eprintln!("Sorry, something went wrong: {}", err);
+            process::exit(1);
+        });
+    }
+
+    return expr;
 }
