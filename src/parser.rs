@@ -1,6 +1,7 @@
 use std::str::Chars;
 
 use crate::parser::Token::{Number, Operator};
+use std::fmt::{Display, Formatter, Error};
 
 #[derive(Debug, PartialEq)]
 pub enum Token {
@@ -9,6 +10,15 @@ pub enum Token {
         priority: u8,
         sign: String,
     },
+}
+
+impl Display for Token {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+        match self {
+            Number(x) => write!(f, "{}", x),
+            Token::Operator { sign, priority } => write!(f, "{}", sign),
+        }
+    }
 }
 
 pub struct Tokenizer<'a> {
