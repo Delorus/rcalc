@@ -38,7 +38,7 @@ pub fn calculate(expr: &str) -> CalcResult {
     assert!(!expr.is_empty());
 
 
-    let tokens = to_prefix_notation(expr);
+    let tokens = to_prefix_notation(expr)?;
 
     let mut result = Vec::new();
     for token in tokens.iter() {
@@ -85,6 +85,8 @@ pub fn calculate(expr: &str) -> CalcResult {
                     _ => panic!("Bug in your code! Found operator '{:?}', that could not be processed", token)
                 }
             }
+
+            _ => panic!("Bug in your code! Found token '{:?}', that could not be processed", token)
         }
     }
 
@@ -95,7 +97,7 @@ pub fn calculate(expr: &str) -> CalcResult {
     return Ok(result.pop().unwrap_or(0.0));
 }
 
-fn to_prefix_notation(expr: &str) -> Vec<Token> {
+fn to_prefix_notation(expr: &str) -> Result<Vec<Token>, Box<dyn Error>> {
     let mut ops: Vec<Token> = Vec::new();
     let mut result: Vec<Token> = Vec::new();
 
@@ -105,6 +107,11 @@ fn to_prefix_notation(expr: &str) -> Vec<Token> {
             Token::Operator { priority, sign } => {
                 loop {
                     if let Some(last) = ops.last() {
+                        if last == &Token::ParenthesesOpen {
+                            ops.push(Token::Operator { priority, sign });
+                            break;
+                        }
+
                         if let Token::Operator { priority: last_p, sign: _ } = last {
                             if last_p <= &priority {
                                 result.push(ops.pop().take().unwrap());
@@ -119,14 +126,28 @@ fn to_prefix_notation(expr: &str) -> Vec<Token> {
                     }
                 }
             }
-        }
+
+            Token::ParenthesesOpen => ops.push(Token::ParenthesesOpen),
+            Token::ParenthesesEnd => {
+                loop {
+                    match ops.pop().ok_or(FormulaParsingError(format!("incorrect expression: no open parentheses found: {:?}", result)))? {
+                        t @ Token::Operator { priority: _, sign: _ } => result.push(t),
+                        Token::ParenthesesOpen => break,
+
+                        _ => panic!("Bug in your code! Found token '{:?}', that could not be processed", token)
+                    };
+                }
+            }
+
+            _ => panic!("Bug in your code! Found token '{:?}', that could not be processed", token)
+        };
     }
 
     while let Some(token) = ops.pop() {
         result.push(token);
     }
 
-    return result;
+    return Ok(result);
 }
 
 #[cfg(test)]
@@ -141,7 +162,19 @@ mod tests {
             ("1 * 2 + 3", "1 2 * 3 +"),
             ("1 + 2 - 3", "1 2 + 3 -"),
         ] {
-            let res = to_prefix_notation(expr);
+            let res = to_prefix_notation(expr).unwrap();
+            assert_eq!(to_string(res), expected)
+        }
+    }
+
+    #[test]
+    fn prefix_notation_allow_parentheses() {
+        for (expr, expected) in vec![
+            ("3 * (1 + 2)", "3 1 2 + *"),
+            ("(1 + 2) * (3 + 4)", "1 2 + 3 4 + *"),
+            ("(1 * (2 + 3) * 4)", "1 2 3 + * 4 *"),
+        ] {
+            let res = to_prefix_notation(expr).unwrap();
             assert_eq!(to_string(res), expected)
         }
     }
@@ -226,6 +259,20 @@ mod tests {
         for expr in vec!["++2", "--2", "*2", "/2"] {
             if let Ok(x) = calculate(expr) {
                 panic!("expected error, but got value: {}", x);
+            }
+        }
+    }
+
+    #[test]
+    fn supported_parentheses() {
+        for (expr, expected) in vec![
+            ("(1+2)", 3.0),
+            ("(1+2) / (3+4)", 0.428571429),
+            ("(1 / ((2 + 3) * 4))", 0.05),
+        ] {
+            match calculate(expr) {
+                Ok(actual) => assert_eq!(actual, expected, "in {}", expr),
+                Err(e) => panic!("fail calc {}: {}", expr, e),
             }
         }
     }

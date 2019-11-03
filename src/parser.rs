@@ -1,6 +1,6 @@
 use std::str::Chars;
 
-use crate::parser::Token::{Number, Operator};
+use crate::parser::Token::{Number, Operator, ParenthesesOpen, ParenthesesEnd};
 use std::fmt::{Display, Formatter, Error};
 
 #[derive(Debug, PartialEq)]
@@ -10,6 +10,8 @@ pub enum Token {
         priority: u8,
         sign: String,
     },
+    ParenthesesOpen,
+    ParenthesesEnd,
 }
 
 impl Display for Token {
@@ -17,6 +19,8 @@ impl Display for Token {
         match self {
             Number(x) => write!(f, "{}", x),
             Token::Operator { sign, priority } => write!(f, "{}", sign),
+            Token::ParenthesesOpen => write!(f, "("),
+            Token::ParenthesesEnd => write!(f, ")"),
         }
     }
 }
@@ -40,6 +44,8 @@ impl<'a> Iterator for Tokenizer<'a> {
                     sign: c.to_string(),
                     priority: 0,
                 }),
+                '(' => return Some(ParenthesesOpen),
+                ')' => return Some(ParenthesesEnd),
                 _ => {}
             };
         }
@@ -68,6 +74,8 @@ impl<'a> Iterator for Tokenizer<'a> {
                                 sign: c.to_string(),
                                 priority: 0,
                             }),
+                            '(' => return Some(ParenthesesOpen),
+                            ')' => return Some(ParenthesesEnd),
                             ' ' => continue,
 
                             _ => None,
@@ -135,6 +143,13 @@ mod tests {
                 Number(42.0)
             ],
             "1.23+42")
+    }
+
+    #[test]
+    fn support_braces() {
+        assert_token(ParenthesesOpen, "(");
+        assert_token(ParenthesesEnd, ")");
+        assert_tokens(&[ParenthesesOpen, ParenthesesEnd], "()");
     }
 
     fn assert_token(expected: Token, actual: &str) {
