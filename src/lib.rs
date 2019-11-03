@@ -144,6 +144,10 @@ fn to_prefix_notation(expr: &str) -> Result<Vec<Token>, Box<dyn Error>> {
     }
 
     while let Some(token) = ops.pop() {
+        if token == Token::ParenthesesOpen {
+            return Err(FormulaParsingError(format!("incorrect expression: no close parentheses found: {:?}", result)).into())
+        }
+
         result.push(token);
     }
 
@@ -273,6 +277,19 @@ mod tests {
             match calculate(expr) {
                 Ok(actual) => assert_eq!(actual, expected, "in {}", expr),
                 Err(e) => panic!("fail calc {}: {}", expr, e),
+            }
+        }
+    }
+
+    #[test]
+    fn invalid_expression() {
+        for expr in vec![
+            ("(1+2"),
+            ("1+2)"),
+            ("1/"),
+        ] {
+            if let Ok(actual) = calculate(expr) {
+                panic!("expected error, but got: {}", actual)
             }
         }
     }
