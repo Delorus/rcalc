@@ -1,7 +1,7 @@
+use std::fmt::{Display, Error, Formatter};
 use std::str::Chars;
 
-use crate::parser::Token::{Number, Operator, ParenthesesOpen, ParenthesesEnd};
-use std::fmt::{Display, Formatter, Error};
+use crate::parser::Token::{Number, Operator, ParenthesesEnd, ParenthesesOpen};
 
 #[derive(Debug, PartialEq)]
 pub enum Token {
@@ -27,7 +27,7 @@ impl Display for Token {
 
 pub struct Tokenizer<'a> {
     chars: Chars<'a>,
-    last_token: Option<char>,
+    last_token: Option<String>,
     buff: String,
 }
 
@@ -35,69 +35,62 @@ impl<'a> Iterator for Tokenizer<'a> {
     type Item = Token;
 
     fn next(&mut self) -> Option<Self::Item> {
+        self.load_next_to_buff();
+
+        let raw_token = Option::from(self.buff.clone())
+            .or(self.last_token.clone());
+        if raw_token == None {
+            return None;
+        }
+        let raw_token = raw_token.unwrap();
+
+        return match raw_token.as_str() {
+            c @ "+" | c @ "-" => Some(Operator {
+                sign: c.to_string(),
+                priority: 1,
+            }),
+            c @ "/" | c @ "*" => Some(Operator {
+                sign: c.to_string(),
+                priority: 0,
+            }),
+            "(" => Some(ParenthesesOpen),
+            ")" => Some(ParenthesesEnd),
+
+            // in other cases it's number
+            num => return match num.parse() {
+                Ok(x) => Some(Number(x)),
+                Err(_) => None,
+            },
+        };
+    }
+}
+
+impl Tokenizer<'_> {
+
+    fn load_next_to_buff(&mut self) {
         self.buff.clear();
 
-        if let Some(c) = self.last_token.take() {
-            match c {
-                '+' | '-' => return Some(Operator {
-                    sign: c.to_string(),
-                    priority: 1,
-                }),
-                '/' | '*' => return Some(Operator {
-                    sign: c.to_string(),
-                    priority: 0,
-                }),
-                '(' => return Some(ParenthesesOpen),
-                ')' => return Some(ParenthesesEnd),
-                _ => {}
-            };
-        }
+        while let Some(c) = self.chars.next() {
+            if let ('0'..='9') | '.' = c {
+                self.buff.push(c);
 
-        loop {
-            match self.chars.next() {
-                Some(c) => {
-                    if let ('0'..='9') | '.' = c {
-                        self.buff.push(c);
-                    } else {
-                        if !self.buff.is_empty() {
-                            self.last_token = Some(c);
-                            return match self.buff.parse() {
-                                Ok(x) => Some(Number(x)),
-                                Err(_) => None,
-                            };
-                        }
-
-                        return match c {
-                            '+' | '-' => Some(Operator {
-                                sign: c.to_string(),
-                                priority: 1,
-                            }),
-                            '/' | '*' => Some(Operator {
-                                sign: c.to_string(),
-                                priority: 0,
-                            }),
-                            '(' => return Some(ParenthesesOpen),
-                            ')' => return Some(ParenthesesEnd),
-                            ' ' => continue,
-
-                            _ => None,
-                        };
-                    }
+            } else if c == ' ' {
+                if !self.buff.is_empty() {
+                    break;
                 }
-                None => {
-                    if self.buff.is_empty() {
-                        return None;
-                    }
 
-                    return match self.buff.parse() {
-                        Ok(x) => Some(Number(x)),
-                        Err(_) => None,
-                    };
+            } else {
+                if self.buff.is_empty() {
+                    self.buff.push(c);
+                } else {
+                    self.last_token = Some(c.to_string());
                 }
+                break;
             }
         }
     }
 }
+
 
 pub trait Tokenized<'a> {
     fn tokenized(self) -> Tokenizer<'a>;
@@ -148,7 +141,7 @@ mod tests {
                 Operator { priority: 1, sign: "+".into() },
                 Number(42.0)
             ],
-            "1.23+42")
+            "1.23 + 42")
     }
 
     #[test]
@@ -158,14 +151,31 @@ mod tests {
         assert_tokens(&[ParenthesesOpen, ParenthesesEnd], "()");
     }
 
-    fn assert_token(expected: Token, actual: &str) {
-        let token: Token = actual.chars().tokenized().next().unwrap();
+    fn assert_token(expected: Token, expr: &str) {
+        let token: Token = expr.chars().tokenized().next().expect(format!("expected: {} in {}", expected, expr).as_str());
         assert_eq!(token, expected);
     }
 
-    fn assert_tokens(expected: &[Token], actual: &str) {
-        for (i, token) in actual.chars().tokenized().enumerate() {
-            assert_eq!(token, expected[i]);
+    fn assert_tokens(expected: &[Token], expr: &str) {
+        let mut actual = Vec::with_capacity(expected.len());
+        for (i, token) in expr.chars().tokenized().enumerate() {
+            assert_eq!(token, expected[i], "{}", expr);
+            actual.push(token);
         }
+
+        if actual.len() != expected.len() {
+            panic!("not all tokens were received, expected: {}, got: {}", to_string(expected), to_string(&actual))
+        }
+    }
+
+    fn to_string(s: &[Token]) -> String {
+        format!("[{}]", s.iter()
+            .fold(String::new(), |s, t| {
+                if s.is_empty() {
+                    t.to_string()
+                } else {
+                    format!("{} {}", s, t.to_string())
+                }
+            }))
     }
 }
