@@ -28,12 +28,15 @@ impl Display for Token {
 pub struct Tokenizer<'a> {
     chars: Chars<'a>,
     last_token: Option<char>,
+    buff: String,
 }
 
 impl<'a> Iterator for Tokenizer<'a> {
     type Item = Token;
 
     fn next(&mut self) -> Option<Self::Item> {
+        self.buff.clear();
+
         if let Some(c) = self.last_token.take() {
             match c {
                 '+' | '-' => return Some(Operator {
@@ -50,16 +53,15 @@ impl<'a> Iterator for Tokenizer<'a> {
             };
         }
 
-        let mut buff = String::with_capacity(5);
         loop {
             match self.chars.next() {
                 Some(c) => {
                     if let ('0'..='9') | '.' = c {
-                        buff.push(c);
+                        self.buff.push(c);
                     } else {
-                        if !buff.is_empty() {
+                        if !self.buff.is_empty() {
                             self.last_token = Some(c);
-                            return match buff.parse() {
+                            return match self.buff.parse() {
                                 Ok(x) => Some(Number(x)),
                                 Err(_) => None,
                             };
@@ -83,11 +85,11 @@ impl<'a> Iterator for Tokenizer<'a> {
                     }
                 }
                 None => {
-                    if buff.is_empty() {
+                    if self.buff.is_empty() {
                         return None;
                     }
 
-                    return match buff.parse() {
+                    return match self.buff.parse() {
                         Ok(x) => Some(Number(x)),
                         Err(_) => None,
                     };
@@ -103,7 +105,11 @@ pub trait Tokenized<'a> {
 
 impl<'a> Tokenized<'a> for Chars<'a> {
     fn tokenized(self) -> Tokenizer<'a> {
-        Tokenizer { chars: self, last_token: None }
+        Tokenizer {
+            chars: self,
+            last_token: None,
+            buff: String::with_capacity(5),
+        }
     }
 }
 
