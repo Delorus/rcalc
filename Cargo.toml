@@ -1,5 +1,5 @@
 [package]
-name = "stac_calc"
+name = "rcalc"
 version = "0.1.0"
 authors = ["mshherbakov <sherbakov.maks@gmail.com>"]
 edition = "2018"
